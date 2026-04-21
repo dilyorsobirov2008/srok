@@ -74,7 +74,11 @@ bot.on('text', (ctx) => {
 
 // 5. Scheduler
 cron.schedule('* * * * *', async () => {
-    const now = new Date();
+    // Render.com yoki boshqa serverlar UTC (0-mintaqa) da ishlaydi. 
+    // O'zbekiston vaqtini (+5) olish uchun:
+    const nowStr = new Date().toLocaleString("en-US", {timeZone: "Asia/Tashkent"});
+    const now = new Date(nowStr);
+    
     const day = String(now.getDate()).padStart(2, '0');
     const month = String(now.getMonth() + 1).padStart(2, '0');
     const year = now.getFullYear();
