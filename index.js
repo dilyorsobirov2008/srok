@@ -22,17 +22,17 @@ bot.on('photo', (ctx) => {
         const caption = message.caption;
         
         // 3. Sana va vaqtni ajratish
-        const dateTimeRegex = /(\d{2})[.-](\d{2})[.-](\d{4})\s+(\d{2}):(\d{2})/;
+        const dateTimeRegex = /(\d{1,2})[.-](\d{1,2})[.-](\d{4})\s+(\d{1,2})[:.](\d{2})/;
         const match = caption.match(dateTimeRegex);
         
         if (match) {
             console.log("Sana va vaqt topildi");
             
-            const day = match[1];
-            const month = match[2];
+            const day = String(match[1]).padStart(2, '0');
+            const month = String(match[2]).padStart(2, '0');
             const year = match[3];
-            const hour = match[4];
-            const minute = match[5];
+            const hour = String(match[4]).padStart(2, '0');
+            const minute = String(match[5]).padStart(2, '0');
             
             // Standartlashtirish: YYYY-MM-DD HH:mm
             const standardDateTime = `${year}-${month}-${day} ${hour}:${minute}`;
@@ -57,18 +57,18 @@ bot.on('photo', (ctx) => {
             ctx.reply("Ma'lumot saqlandi. Belgilangan vaqtda yuboriladi.");
         } else {
             // Noto'g'ri format bo'lsa
-            ctx.reply("Iltimos sana va vaqtni to‘g‘ri yozing: 25.04.2026 17:00");
+            ctx.reply("Iltimos sana va vaqtni to‘g‘ri yozing. Masalan: 25.04.2026 08:00 yoki 17:00");
         }
     } else {
         // Caption yo'q bo'lsa
-        ctx.reply("Iltimos sana va vaqtni to‘g‘ri yozing: 25.04.2026 17:00");
+        ctx.reply("Iltimos sana va vaqtni to‘g‘ri yozing. Masalan: 25.04.2026 08:00 yoki 17:00");
     }
 });
 
 // Matn yuborilganda xabar berish
 bot.on('text', (ctx) => {
     if (!ctx.message.text.startsWith('/')) {
-        ctx.reply("Iltimos, avval rasm yuboring va uni ostiga (caption qismiga) sana va vaqtni yozing: 25.04.2026 17:00");
+        ctx.reply("Iltimos, avval rasm yuboring va uni ostiga (caption qismiga) sana va vaqtni yozing. Masalan: 25.04.2026 08:00 yoki 17:00");
     }
 });
 
