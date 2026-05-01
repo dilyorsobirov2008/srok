@@ -6,104 +6,105 @@ const crypto = require('crypto');
 const http = require('http');
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
+const CHANNEL_ID = process.env.CHANNEL_ID;
 
-// 1. User bilan ishlash
 bot.start((ctx) => {
-    // /start bosilganda
-    ctx.reply('Rasm va sana vaqt yuboring');
+    ctx.reply("Iltimos rasm yuboring va srok yozing\nMasalan: 25.06.2026");
 });
 
-// 2. Post qabul qilish
 bot.on('photo', (ctx) => {
     const message = ctx.message;
     const userId = ctx.from.id;
     
-    if (message.caption) {
-        const caption = message.caption;
-        
-        // 3. Sana va vaqtni ajratish
-        const dateTimeRegex = /(\d{1,2})[.-](\d{1,2})[.-](\d{4})\s+(\d{1,2})[:.](\d{2})/;
-        const match = caption.match(dateTimeRegex);
-        
-        if (match) {
-            console.log("Sana va vaqt topildi");
-            
-            const day = String(match[1]).padStart(2, '0');
-            const month = String(match[2]).padStart(2, '0');
-            const year = match[3];
-            const hour = String(match[4]).padStart(2, '0');
-            const minute = String(match[5]).padStart(2, '0');
-            
-            // Standartlashtirish: YYYY-MM-DD HH:mm
-            const standardDateTime = `${year}-${month}-${day} ${hour}:${minute}`;
-            
-            // Rasmni olish
-            const photoId = message.photo[message.photo.length - 1].file_id;
-            
-            // 4. Ma'lumotni saqlash
-            const newPost = {
-                id: crypto.randomUUID(),
-                user_id: userId,
-                file_id: photoId,
-                caption: caption,
-                datetime: standardDateTime,
-                original_datetime: match[0],
-                sent: false
-            };
-            
-            db.addPost(newPost);
-            console.log("Yangi post saqlandi");
-            
-            ctx.reply("Ma'lumot saqlandi. Belgilangan vaqtda yuboriladi.");
-        } else {
-            // Noto'g'ri format bo'lsa
-            ctx.reply("Iltimos sana va vaqtni to‘g‘ri yozing. Masalan: 25.04.2026 08:00 yoki 17:00");
-        }
-    } else {
-        // Caption yo'q bo'lsa
-        ctx.reply("Iltimos sana va vaqtni to‘g‘ri yozing. Masalan: 25.04.2026 08:00 yoki 17:00");
+    if (!message.caption) {
+        return ctx.reply("❌ To‘g‘ri format: 25.06.2026");
     }
+
+    const caption = message.caption.trim();
+    const dateRegex = /(\d{2})[\.\-](\d{2})[\.\-](\d{4})/;
+    const match = caption.match(dateRegex);
+    
+    if (!match) {
+        return ctx.reply("❌ To‘g‘ri format: 25.06.2026");
+    }
+
+    // 4. Vaqt olish:
+    // ctx.message.date dan olinadi
+    // Soat va minut saqlanadi
+    const messageDate = new Date(message.date * 1000);
+    const hours = messageDate.getHours();
+    const minutes = messageDate.getMinutes();
+
+    const day = parseInt(match[1]);
+    const month = parseInt(match[2]) - 1; // Oylarni 0 dan boshlanishi uchun
+    const year = parseInt(match[3]);
+
+    // 5. Hisoblash:
+    // end_date = captiondagi sana, vaqt esa rasm yuborilgan vaqt
+    const endDate = new Date(year, month, day, hours, minutes, 0, 0);
+    
+    // send_date = end_date - 30 kun
+    const sendDate = new Date(endDate);
+    sendDate.setDate(sendDate.getDate() - 30);
+    
+    console.log("30 kun oldingi sana hisoblandi");
+
+    const photoId = message.photo[message.photo.length - 1].file_id;
+
+    // 7. Saqlash:
+    const newPost = {
+        id: crypto.randomUUID(),
+        user_id: userId,
+        file_id: photoId,
+        caption: caption,
+        end_date: `${String(day).padStart(2, '0')}.${String(month+1).padStart(2, '0')}.${year}`,
+        send_datetime: sendDate.getTime(),
+        status: 'pending'
+    };
+
+    db.addPost(newPost);
+    console.log("Post saqlandi");
+
+    ctx.reply("Ma'lumot saqlandi. Belgilangan vaqtda xabar beriladi.");
 });
 
-// Matn yuborilganda xabar berish
 bot.on('text', (ctx) => {
     if (!ctx.message.text.startsWith('/')) {
-        ctx.reply("Iltimos, avval rasm yuboring va uni ostiga (caption qismiga) sana va vaqtni yozing. Masalan: 25.04.2026 08:00 yoki 17:00");
+        ctx.reply("Iltimos rasm yuboring va srok yozing\nMasalan: 25.06.2026");
     }
 });
 
-// 5. Scheduler
+// 8. Scheduler: Har 1 minut tekshiradi
 cron.schedule('* * * * *', async () => {
-    // Render.com yoki boshqa serverlar UTC (0-mintaqa) da ishlaydi. 
-    // O'zbekiston vaqtini (+5) olish uchun:
-    const nowStr = new Date().toLocaleString("en-US", {timeZone: "Asia/Tashkent"});
-    const now = new Date(nowStr);
-    
-    const day = String(now.getDate()).padStart(2, '0');
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const year = now.getFullYear();
-    const hour = String(now.getHours()).padStart(2, '0');
-    const minute = String(now.getMinutes()).padStart(2, '0');
-    
-    const currentDateTimeStr = `${year}-${month}-${day} ${hour}:${minute}`;
-    
-    // hozirgi vaqt >= saqlangan datetime
-    const pendingPosts = db.getPendingPosts(currentDateTimeStr);
+    const now = Date.now();
+    const pendingPosts = db.getPendingPosts(now);
     
     if (pendingPosts.length > 0) {
         for (const post of pendingPosts) {
             try {
-                // 6. Yuborish - Faqat o'sha yuborgan userga qaytariladi
+                // 1) Userga yuborish
                 await bot.telegram.sendPhoto(post.user_id, post.file_id, {
                     caption: post.caption
                 });
                 console.log("Userga yuborildi");
                 
-                // 7. Duplicate oldini olish
+                // 2) Kanalga yuborish
+                if (CHANNEL_ID) {
+                    try {
+                        await bot.telegram.sendPhoto(CHANNEL_ID, post.file_id, {
+                            caption: post.caption + "\n⚠️ Srok yaqinlashmoqda!"
+                        });
+                        console.log("Kanalga yuborildi");
+                    } catch (channelErr) {
+                        console.error(`Kanalga yuborishda xatolik:`, channelErr.message);
+                    }
+                }
+                
+                // 3) status = sent
                 db.markPostAsSent(post.id);
             } catch (err) {
-                console.error(`User ${post.user_id} ga yuborishda xatolik:`, err.message);
-                // Agar user bloklagan bo'lsa ham 'sent' qilib belgilaymiz
+                console.error(`Xatolik yuz berdi (Post ID: ${post.id}):`, err.message);
+                // Agar user bloklagan bo'lsa ham 'sent' qilib belgilaymiz, qayta urinmaslik uchun
                 db.markPostAsSent(post.id);
             }
         }
@@ -111,7 +112,7 @@ cron.schedule('* * * * *', async () => {
 });
 
 bot.catch((err, ctx) => {
-    console.error(`Xatolik: ${ctx.updateType}`, err);
+    console.error(`Global xatolik: ${ctx.updateType}`, err);
 });
 
 bot.launch().then(() => {
@@ -121,7 +122,6 @@ bot.launch().then(() => {
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
 
-// Render.com Web Service qoidalari uchun oddiy server (Port binding)
 const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => {
     res.writeHead(200);

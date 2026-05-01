@@ -25,17 +25,16 @@ function addPost(post) {
     writeDb(db);
 }
 
-function getPendingPosts(currentDateTime) {
+function getPendingPosts(currentTimestamp) {
     const db = readDb();
-    // String comparison works flawlessly for YYYY-MM-DD HH:mm
-    return db.posts.filter(p => !p.sent && currentDateTime >= p.datetime);
+    return db.posts.filter(p => p.status === 'pending' && currentTimestamp >= p.send_datetime);
 }
 
 function markPostAsSent(postId) {
     const db = readDb();
     const postIndex = db.posts.findIndex(p => p.id === postId);
     if (postIndex !== -1) {
-        db.posts[postIndex].sent = true;
+        db.posts[postIndex].status = 'sent';
         writeDb(db);
     }
 }
