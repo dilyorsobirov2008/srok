@@ -31,9 +31,14 @@ bot.on('photo', (ctx) => {
     // 4. Vaqt olish:
     // ctx.message.date dan olinadi
     // Soat va minut saqlanadi
-    const messageDate = new Date(message.date * 1000);
-    const hours = messageDate.getHours();
-    const minutes = messageDate.getMinutes();
+    const date = new Date(message.date * 1000);
+    const uzTime = new Date(
+        date.toLocaleString("en-US", {
+            timeZone: "Asia/Tashkent"
+        })
+    );
+    const hours = String(uzTime.getHours()).padStart(2, '0');
+    const minutes = String(uzTime.getMinutes()).padStart(2, '0');
 
     const day = parseInt(match[1]);
     const month = parseInt(match[2]) - 1; // Oylarni 0 dan boshlanishi uchun
