@@ -17,7 +17,7 @@ bot.on('photo', (ctx) => {
     const userId = ctx.from.id;
     
     if (!message.caption) {
-        return ctx.reply("❌ To‘g‘ri format: 25.06.2026");
+        return ctx.reply("❌ Sana noto‘g‘ri! To‘g‘ri yozing: 25.06.2026");
     }
 
     const caption = message.caption.trim();
@@ -25,7 +25,7 @@ bot.on('photo', (ctx) => {
     const match = caption.match(dateRegex);
     
     if (!match) {
-        return ctx.reply("❌ To‘g‘ri format: 25.06.2026");
+        return ctx.reply("❌ Sana noto‘g‘ri! To‘g‘ri yozing: 25.06.2026");
     }
 
     // 4. Vaqt olish:
@@ -65,7 +65,15 @@ bot.on('photo', (ctx) => {
     db.addPost(newPost);
     console.log("Post saqlandi");
 
-    ctx.reply("Ma'lumot saqlandi. Belgilangan vaqtda xabar beriladi.");
+    const formattedEndDate = newPost.end_date;
+    const sendDay = String(sendDate.getDate()).padStart(2, '0');
+    const sendMonth = String(sendDate.getMonth() + 1).padStart(2, '0');
+    const sendYear = sendDate.getFullYear();
+    const sendHours = String(sendDate.getHours()).padStart(2, '0');
+    const sendMinutes = String(sendDate.getMinutes()).padStart(2, '0');
+    const formattedSendDate = `${sendDay}.${sendMonth}.${sendYear} ${sendHours}:${sendMinutes}`;
+
+    ctx.reply(`✅ Saqlandi!\n\n📅 Srok tugash sanasi: ${formattedEndDate}\n⏰ Sizga yuboriladi:\n${formattedSendDate}`);
 });
 
 bot.on('text', (ctx) => {
