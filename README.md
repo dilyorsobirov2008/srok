@@ -1,0 +1,25 @@
+# Srok Bot
+
+Node.js + Telegraf bilan yozilgan Telegram bot.
+
+## Vazifasi
+- User rasm + sana (DD.MM.YYYY) yuboradi
+- Bot srokdan **30 kun oldin** soat **10:30** (Asia/Tashkent) da:
+  - Userga rasmni qaytarib yuboradi
+  - Kanalga ham yuboradi + "⚠️ Srok yaqinlashmoqda!" qo'shadi
+
+## Ishga tushirish
+
+```bash
+npm install
+node index.js
+```
+
+## .env
+
+```
+BOT_TOKEN=YOUR_BOT_TOKEN
+CHANNEL_ID=-100xxxxxxxxxx
+```
+
+> Bot kanal adminlari qatoriga qo'shilgan va **Post Messages** huquqi berilgan bo'lishi shart.
