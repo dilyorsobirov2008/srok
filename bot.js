@@ -5,8 +5,6 @@ const moment = require('moment-timezone');
 const http = require('http');
 const { getReminders, saveReminder, updateReminderStatus } = require('./database');
 
-// 1. DUMMY HTTP SERVER FOR RENDER.COM
-// Render xizmati port talab qiladi (Web Service uchun), shuning uchun oddiy server ochamiz.
 const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => {
     res.writeHead(200);
@@ -16,10 +14,24 @@ http.createServer((req, res) => {
 });
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
-const CHANNEL_ID = process.env.CHANNEL_ID;
 const TIMEZONE = 'Asia/Tashkent';
 
-// Yo'riqnoma
+const CATEGORIES = {
+    "ximka mahsulotlari": "-1003935760505",
+    "bolalar tovarlari": "-1004298573905",
+    "meva": "-1003784443278",
+    "snek choy kofe shokolad": "-1003453819256",
+    "suv": "-1003739895204",
+    "qandolat kg": "-1003912163997",
+    "konserva yog": "-1003990413251",
+    "kolbasa": "-1003797680744"
+};
+
+function capitalize(s) {
+    if (!s) return '';
+    return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
 const INSTRUCTION = `📋 *YO‘RIQNOMA*
 
 1️⃣ Tovar rasmini yuboring.
@@ -27,21 +39,32 @@ const INSTRUCTION = `📋 *YO‘RIQNOMA*
 
 \`25.06.2026\`
 \`30\`
+\`meva\`
 
 Bunda:
 📅 *25.06.2026* — mahsulot sroki tugaydigan sana
 ⏳ *30* — srok tugashidan necha kun oldin eslatish kerakligi
+📦 *meva* — kategoriya nomi
+
+*Mavjud kategoriyalar:*
+- ximka mahsulotlari
+- bolalar tovarlari
+- meva
+- snek choy kofe shokolad
+- suv
+- qandolat kg
+- konserva yog
+- kolbasa
 
 *Misollar:*
 \`25.06.2026\`
 \`30\`
+\`meva\`
 (30 kun oldin yuboriladi)
-
-\`25-06-2026 15\`
-(15 kun oldin yuboriladi)
 
 \`25.06.2026 16:00\`
 \`15\`
+\`kolbasa\`
 (15 kun oldin soat 16:00 da yuboriladi)`;
 
 bot.start((ctx) => {
@@ -53,25 +76,35 @@ bot.on('photo', async (ctx) => {
         const caption = ctx.message.caption || '';
         
         if (!caption.trim()) {
-            return ctx.reply('❌ Siz rasmga hech qanday izoh yozmadingiz.\n\nIltimos, rasm ostiga sana va kunni yozing:\nMisol uchun:\n05.05.2027\n30');
+            return ctx.reply('❌ Siz rasmga hech qanday izoh yozmadingiz.\n\nIltimos, rasm ostiga sana, kun va kategoriyani yozing:\nMisol uchun:\n25.06.2026\n30\nmeva');
         }
 
-        // Regex parser: 
-        // 1-guruh: Sana (DD.MM.YYYY yoki DD-MM-YYYY)
-        // 2-guruh: Vaqt (HH:mm) - ixtiyoriy
-        // 3-guruh: Kun soni
-        // Bular orasida probel yoki yangi qator bo'lishi mumkin
-        const regex = /^(\d{2}[.-]\d{2}[.-]\d{4})(?:\s+(\d{2}:\d{2}))?(?:\s+|\n+)(\d+)$/i;
-        const match = caption.trim().match(regex);
-
-        if (!match) {
-            console.log(`Noto'g'ri format qabul qilindi: ${caption}`);
-            return ctx.reply('❌ Noto‘g‘ri format\n\nTo‘g‘ri misollar:\n\n05.05.2027\n30\n\nyoki\n\n05.05.2027 16:00\n15\n\nyoki\n\n05-05-2027 7');
+        const lines = caption.trim().split(/\r?\n/).map(l => l.trim()).filter(l => l !== '');
+        if (lines.length < 3) {
+            return ctx.reply('❌ Noto‘g‘ri format\n\nTo‘g‘ri misollar:\n\n25.06.2026\n30\nmeva\n\nyoki\n\n25.06.2026 16:00\n15\nkolbasa');
         }
 
-        let dateStr = match[1].replace(/-/g, '.'); // 05-05-2027 ni 05.05.2027 ga o'tkazamiz
-        const timeStr = match[2]; // '16:00' yoki undefined
-        const daysStr = match[3];
+        const dateLine = lines[0];
+        const daysStr = lines[1];
+        const categoryName = lines.slice(2).join(' ').toLowerCase();
+
+        const dateMatch = dateLine.match(/^(\d{2}[.-]\d{2}[.-]\d{4})(?:\s+(\d{2}:\d{2}))?$/);
+        if (!dateMatch) {
+            return ctx.reply('❌ Sana noto‘g‘ri formatda!\nTo‘g‘ri misollar: 25.06.2026 yoki 25.06.2026 16:00');
+        }
+
+        let dateStr = dateMatch[1].replace(/-/g, '.');
+        const timeStr = dateMatch[2];
+        const reminderDays = parseInt(daysStr, 10);
+
+        let channel_id = CATEGORIES[categoryName];
+        if (!channel_id) {
+            let errorMsg = `❌ Kategoriya topilmadi\n\nMavjud kategoriyalar:\n\n`;
+            for (let cat of Object.keys(CATEGORIES)) {
+                errorMsg += `- ${cat}\n`;
+            }
+            return ctx.reply(errorMsg);
+        }
 
         let expiryMoment;
         if (timeStr) {
@@ -80,8 +113,6 @@ bot.on('photo', async (ctx) => {
             // Standart vaqt: 10:30
             expiryMoment = moment.tz(`${dateStr} 10:30`, 'DD.MM.YYYY HH:mm', true, TIMEZONE);
         }
-
-        const reminderDays = parseInt(daysStr, 10);
 
         if (!expiryMoment.isValid()) {
             return ctx.reply('❌ Kiritilgan sana mavjud emas yoki noto‘g‘ri.\nIltimos, DD.MM.YYYY formatida to‘g‘ri sana kiriting (masalan, 31.12.2026).');
@@ -101,6 +132,8 @@ bot.on('photo', async (ctx) => {
             original_caption: caption,
             expiry_date: dateStr,
             reminder_days: reminderDays,
+            category: categoryName,
+            channel_id: channel_id,
             send_datetime: sendDatetime.toISOString(),
             status: 'pending'
         };
@@ -108,9 +141,9 @@ bot.on('photo', async (ctx) => {
         // Bazaga saqlash
         await saveReminder(reminder);
 
-        console.log(`✅ Tovar saqlandi: user_id=${ctx.from.id}, sana=${dateStr}, yuboriladi=${sendDatetime.format('DD.MM.YYYY HH:mm')}`);
+        console.log(`✅ Tovar saqlandi: user_id=${ctx.from.id}, sana=${dateStr}, kategoriya=${categoryName}, yuboriladi=${sendDatetime.format('DD.MM.YYYY HH:mm')}`);
 
-        ctx.reply(`✅ Tovar saqlandi\n\n📅 Srok:\n${dateStr}\n\n⏳ Eslatma:\n${reminderDays} kun oldin\n\n🚀 Yuboriladi:\n${sendDatetime.format('DD.MM.YYYY HH:mm')}`);
+        ctx.reply(`✅ Tovar saqlandi\n\n📦 Kategoriya:\n${capitalize(categoryName)}\n\n📅 Srok:\n${dateStr}\n\n⏳ Eslatma:\n${reminderDays} kun oldin\n\n🚀 Yuboriladi:\n${sendDatetime.format('DD.MM.YYYY HH:mm')}\n\n📢 Kanal:\n${capitalize(categoryName)}`);
 
     } catch (error) {
         console.error("Rasm qabul qilishda xatolik:", error);
@@ -133,29 +166,28 @@ cron.schedule('* * * * *', async () => {
             if (now.isSameOrAfter(sendMoment)) {
                 console.log(`🚀 Vaqti keldi! Yuborilmoqda: id=${r.id}`);
                 
-                const channelCaption = `⚠️ *SROKI YAQINLASHAYOTGAN MAHSULOT*\n\n📅 Srok:\n${r.expiry_date}\n\n⏳ ${r.reminder_days} kun oldin eslatildi`;
+                const channelCaption = `⚠️ SROKI YAQINLASHAYOTGAN MAHSULOT\n\n📦 Kategoriya:\n${capitalize(r.category)}\n\n📅 Srok:\n${r.expiry_date}\n\n⏳ ${r.reminder_days} kun oldin eslatildi`;
                 
                 // 1. Kanalga yuborish
                 let channelSuccess = false;
-                if (CHANNEL_ID) {
+                if (r.channel_id) {
                     try {
-                        await bot.telegram.sendPhoto(CHANNEL_ID, r.file_id, {
-                            caption: channelCaption,
-                            parse_mode: 'Markdown'
+                        await bot.telegram.sendPhoto(r.channel_id, r.file_id, {
+                            caption: channelCaption
                         });
                         channelSuccess = true;
                     } catch (err) {
-                        console.error(`❌ Kanalga yuborishda xatolik (CHANNEL_ID=${CHANNEL_ID}):`, err.message);
+                        console.error(`❌ Kanalga yuborishda xatolik (channel_id=${r.channel_id}):`, err.message);
                     }
                 } else {
-                    console.error("❌ CHANNEL_ID .env faylida ko'rsatilmagan!");
+                    console.error("❌ Kategoriya uchun kanal ID topilmadi!");
                 }
 
-                // 2. Userga yuborish (original caption)
+                // 2. Userga yuborish
                 let userSuccess = false;
                 try {
                     await bot.telegram.sendPhoto(r.user_id, r.file_id, {
-                        caption: r.original_caption
+                        caption: channelCaption
                     });
                     userSuccess = true;
                 } catch (err) {
